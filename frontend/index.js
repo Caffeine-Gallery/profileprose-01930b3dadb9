@@ -1,11 +1,14 @@
 import { AuthClient } from "@dfinity/auth-client";
 import { backend } from "declarations/backend";
+import { Principal } from "@dfinity/principal";
 
 let authClient;
 let userPrincipal;
+let authMethod = null;
 
 // DOM Elements
-const loginBtn = document.getElementById("loginBtn");
+const iiLoginBtn = document.getElementById("iiLoginBtn");
+const plugLoginBtn = document.getElementById("plugLoginBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const profileBtn = document.getElementById("profileBtn");
 const profileSection = document.getElementById("profileSection");
@@ -18,15 +21,29 @@ const loadingSpinner = document.getElementById("loadingSpinner");
 async function init() {
     authClient = await AuthClient.create();
     if (await authClient.isAuthenticated()) {
+        authMethod = 'ii';
+        handleAuthenticated();
+    } else if (window.ic?.plug && await window.ic.plug.isConnected()) {
+        authMethod = 'plug';
         handleAuthenticated();
     }
     setupEventListeners();
     loadPosts();
+    checkPlug();
+}
+
+async function checkPlug() {
+    const plugAvailable = window.ic?.plug;
+    if (!plugAvailable) {
+        plugLoginBtn.disabled = true;
+        plugLoginBtn.textContent = 'Plug Wallet Not Found';
+    }
 }
 
 // Event Listeners
 function setupEventListeners() {
-    loginBtn.onclick = login;
+    iiLoginBtn.onclick = loginWithII;
+    plugLoginBtn.onclick = loginWithPlug;
     logoutBtn.onclick = logout;
     profileBtn.onclick = showProfile;
     newPostBtn.onclick = showCreatePost;
@@ -35,22 +52,54 @@ function setupEventListeners() {
 }
 
 // Authentication
-async function login() {
+async function loginWithII() {
     await authClient.login({
         identityProvider: "https://identity.ic0.app",
-        onSuccess: handleAuthenticated,
+        onSuccess: () => {
+            authMethod = 'ii';
+            handleAuthenticated();
+        },
     });
 }
 
+async function loginWithPlug() {
+    try {
+        const whitelist = [process.env.CANISTER_ID_BACKEND];
+        const host = "https://mainnet.dfinity.network";
+        
+        const result = await window.ic.plug.requestConnect({
+            whitelist,
+            host,
+        });
+
+        if (result) {
+            authMethod = 'plug';
+            handleAuthenticated();
+        }
+    } catch (error) {
+        console.error("Error connecting to Plug wallet:", error);
+    }
+}
+
 async function logout() {
-    await authClient.logout();
+    if (authMethod === 'ii') {
+        await authClient.logout();
+    } else if (authMethod === 'plug') {
+        await window.ic.plug.disconnect();
+    }
+    authMethod = null;
     userPrincipal = null;
     updateUI(false);
     loadPosts();
 }
 
 async function handleAuthenticated() {
-    userPrincipal = await authClient.getIdentity().getPrincipal();
+    if (authMethod === 'ii') {
+        userPrincipal = await authClient.getIdentity().getPrincipal();
+    } else if (authMethod === 'plug') {
+        const principal = await window.ic.plug.agent.getPrincipal();
+        userPrincipal = principal;
+    }
     updateUI(true);
     loadProfile();
     loadPosts();
@@ -58,7 +107,8 @@ async function handleAuthenticated() {
 
 // UI Updates
 function updateUI(isAuthenticated) {
-    loginBtn.classList.toggle("d-none", isAuthenticated);
+    const loginDropdown = document.getElementById("loginDropdown");
+    loginDropdown.classList.toggle("d-none", isAuthenticated);
     logoutBtn.classList.toggle("d-none", !isAuthenticated);
     profileBtn.classList.toggle("d-none", !isAuthenticated);
     newPostBtn.classList.toggle("d-none", !isAuthenticated);
@@ -162,7 +212,6 @@ async function displayPosts(posts) {
     const postsList = document.getElementById("postsList");
     postsList.innerHTML = "";
 
-    // Sort posts by created timestamp (BigInt)
     const sortedPosts = [...posts].sort((a, b) => {
         const timeA = BigInt(a.created);
         const timeB = BigInt(b.created);
@@ -195,7 +244,6 @@ async function displayPosts(posts) {
                 </div>
             `;
 
-            // Add event listener for delete button
             const deleteBtn = postElement.querySelector('.delete-post');
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', async () => {

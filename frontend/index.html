@@ -12,7 +12,15 @@
         <div class="container">
             <a class="navbar-brand" href="#">IC Blog</a>
             <div class="d-flex">
-                <button id="loginBtn" class="btn btn-outline-light">Login</button>
+                <div class="dropdown">
+                    <button class="btn btn-outline-light dropdown-toggle" type="button" id="loginDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        Connect
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="loginDropdown">
+                        <li><button class="dropdown-item" id="iiLoginBtn">Internet Identity</button></li>
+                        <li><button class="dropdown-item" id="plugLoginBtn">Plug Wallet</button></li>
+                    </ul>
+                </div>
                 <button id="profileBtn" class="btn btn-light ms-2 d-none">Profile</button>
                 <button id="logoutBtn" class="btn btn-outline-light ms-2 d-none">Logout</button>
             </div>
@@ -67,7 +75,7 @@
     </div>
 
     <!-- Loading Spinner -->
-    <div id="loadingSpinner" class="loading-spinner d-none">
+    <div id="loadingSpinner" class="d-none">
         <div class="spinner-border text-primary" role="status">
             <span class="visually-hidden">Loading...</span>
         </div>
