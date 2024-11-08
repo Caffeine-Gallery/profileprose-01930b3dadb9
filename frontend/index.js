@@ -133,11 +133,11 @@ async function createPost(e) {
 
     try {
         const result = await backend.createPost(title, content);
-        if (result) {
+        if (result !== null) {
             document.getElementById("postForm").reset();
             createPostSection.classList.add("d-none");
             postsSection.classList.remove("d-none");
-            loadPosts();
+            await loadPosts();
         }
     } catch (error) {
         console.error("Error creating post:", error);
@@ -148,8 +148,10 @@ async function createPost(e) {
 async function loadPosts() {
     showLoading(true);
     try {
+        console.log("Fetching posts...");
         const posts = await backend.getAllPosts();
-        displayPosts(posts);
+        console.log("Received posts:", posts);
+        await displayPosts(posts);
     } catch (error) {
         console.error("Error loading posts:", error);
     }
@@ -160,46 +162,68 @@ async function displayPosts(posts) {
     const postsList = document.getElementById("postsList");
     postsList.innerHTML = "";
 
-    for (const post of posts.sort((a, b) => b.created - a.created)) {
-        const profile = await backend.getProfile(post.author);
-        const username = profile ? profile.username : "Anonymous";
-        
-        const postElement = document.createElement("div");
-        postElement.className = "card mb-3";
-        postElement.innerHTML = `
-            <div class="card-body">
-                <h5 class="card-title">${post.title}</h5>
-                <h6 class="card-subtitle mb-2 text-muted">By ${username}</h6>
-                <p class="card-text">${post.content}</p>
-                <div class="text-muted small">
-                    Posted: ${new Date(Number(post.created) / 1000000).toLocaleString()}
-                </div>
-                ${post.author.toString() === userPrincipal?.toString() ? `
-                    <div class="mt-2">
-                        <button class="btn btn-sm btn-danger" onclick="deletePost(${post.id})">Delete</button>
+    // Sort posts by created timestamp (BigInt)
+    const sortedPosts = [...posts].sort((a, b) => {
+        const timeA = BigInt(a.created);
+        const timeB = BigInt(b.created);
+        return timeB > timeA ? 1 : timeB < timeA ? -1 : 0;
+    });
+
+    for (const post of sortedPosts) {
+        try {
+            const profile = await backend.getProfile(post.author);
+            const username = profile ? profile.username : "Anonymous";
+            
+            const postElement = document.createElement("div");
+            postElement.className = "card mb-3";
+            
+            const createdDate = new Date(Number(BigInt(post.created) / BigInt(1000000)));
+            
+            postElement.innerHTML = `
+                <div class="card-body">
+                    <h5 class="card-title">${post.title}</h5>
+                    <h6 class="card-subtitle mb-2 text-muted">By ${username}</h6>
+                    <p class="card-text">${post.content}</p>
+                    <div class="text-muted small">
+                        Posted: ${createdDate.toLocaleString()}
                     </div>
-                ` : ''}
-            </div>
-        `;
-        postsList.appendChild(postElement);
+                    ${post.author.toString() === userPrincipal?.toString() ? `
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-danger delete-post" data-post-id="${post.id}">Delete</button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            // Add event listener for delete button
+            const deleteBtn = postElement.querySelector('.delete-post');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', async () => {
+                    await deletePost(post.id);
+                });
+            }
+
+            postsList.appendChild(postElement);
+        } catch (error) {
+            console.error("Error displaying post:", error);
+        }
     }
 }
 
-// Initialize the app
-init();
-
-// Make deletePost available globally
-window.deletePost = async function(id) {
+async function deletePost(id) {
     if (confirm("Are you sure you want to delete this post?")) {
         showLoading(true);
         try {
             const result = await backend.deletePost(id);
             if (result) {
-                loadPosts();
+                await loadPosts();
             }
         } catch (error) {
             console.error("Error deleting post:", error);
         }
         showLoading(false);
     }
-};
+}
+
+// Initialize the app
+init();
