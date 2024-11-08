@@ -1,0 +1,28 @@
+type Time = int;
+type Profile = 
+ record {
+   avatar: text;
+   bio: text;
+   created: Time;
+   username: text;
+ };
+type Post = 
+ record {
+   author: principal;
+   content: text;
+   created: Time;
+   id: nat;
+   title: text;
+   updated: Time;
+ };
+service : {
+  createPost: (text, text) -> (opt nat);
+  createProfile: (text, text, text) -> (bool);
+  deletePost: (nat) -> (bool);
+  getAllPosts: () -> (vec Post) query;
+  getPost: (nat) -> (opt Post) query;
+  getPostsByUser: (principal) -> (vec Post) query;
+  getProfile: (principal) -> (opt Profile) query;
+  updatePost: (nat, text, text) -> (bool);
+  updateProfile: (text, text, text) -> (bool);
+}
